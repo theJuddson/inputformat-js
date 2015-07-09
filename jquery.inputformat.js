@@ -104,8 +104,8 @@
             elem.attr('placeholder', placeholder);
         }
         elem.keydown(function(e){
-            // Allow cursor movement: home, end, left, right, down, up
-            if((e.keyCode >= 35 && e.keyCode <= 40)){
+            // Allow: home, end, left, right
+            if(($.inArray(e.keyCode, [35, 36, 37, 39]) !== -1)){
                 return;
             }
 
@@ -135,8 +135,17 @@
             var pos = curCaret.begin;
             var len = curCaret.len;
 
-            // Handle: backspace
             var currentValue = elem.val();
+
+            // Handle: up, down
+            if($.inArray(e.keyCode, [38, 40]) !== -1){
+                if(e.keyCode == 38){
+                    setCursorPosition(elem, 0);
+                } else {
+                    setCursorPosition(elem, currentValue.length);
+                }
+            }
+            // Handle: backspace
             if ($.inArray(e.keyCode, [8]) !== -1){
                 if(currentValue.length > 0 && len == 0){
                     if(pos > 0){
