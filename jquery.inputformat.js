@@ -1,5 +1,8 @@
 (function( $ ) {
 
+    //Flag to tell element to temporarily suspend formatting.
+    var suspendFormatting = false;
+
     var formatWithMask = function(value, mask, numeric, alpha){
         if(value.length > 0){
             var formatted = "";
@@ -98,7 +101,7 @@
     }
 
 
-    var withFormat = function(elem, format, placeholder, numeric, alpha){
+    var withFormat = function(elem, format, placeholder, numeric, alpha, preventAutofill){
         // Add $ placeholder if one doesn't already exist
         if(!elem.attr('placeholder') && placeholder){
             elem.attr('placeholder', placeholder);
@@ -115,10 +118,10 @@
             }
 
             // Allow: CTRL/CMD+Alpha (selection, copy, cut, paste, etc.)
-            if((e.ctrlKey === true || e.metaKey === true) && (event.keyCode >= 65 && event.keyCode <= 90)){
-                if(event.keyCode >= 65 && event.keyCode < 90){
+            if((e.ctrlKey === true || e.metaKey === true) && (e.keyCode >= 65 && e.keyCode <= 90)){
+                if(e.keyCode >= 65 && e.keyCode < 90){
                     return;
-                } else if(event.keyCode == 90){
+                } else if(e.keyCode == 90){
                     //Allow undo, but make sure we format afterwards or else wierd stuff can happen.
                     setTimeout(function(){if(elem.val()){
                         elem.val(formatWithMask(elem.val(), format, numeric, alpha));
@@ -188,7 +191,7 @@
             // Handle 0-9 on regular keyboard IF not holding shift press 0-9 on the number pad
             if ((numeric && ((!e.shiftKey && (e.keyCode >= 48 && e.keyCode <= 57)) ||
                 // Allow 0-9 on the numpad.
-                (e.keyCode >= 96 && e.keyCode <= 105))) || (alpha && (event.keyCode >= 65 && event.keyCode <= 90))){
+                (e.keyCode >= 96 && e.keyCode <= 105))) || (alpha && (e.keyCode >= 65 && e.keyCode <= 90))){
                 if(len > 0){
                     var leftOfCursor = currentValue.substring(0, pos);
                     var rightOfSelection = currentValue.substring(pos+len);
@@ -215,24 +218,41 @@
             }
         });
 
+        if(preventAutofill){
+            //This looks weird, but if you click on an input that already has focus, Chrome lights up their autofill feature.
+            //Dropping and reaquiring focus prevents this.
+            elem.click(function(e){
+                if($(this).is(":focus")){
+                    suspendFormatting = true;
+                    $(this).blur();
+                    $(this).focus();
+                    suspendFormatting = false;
+                }
+            });
+        }
+
         elem.blur(function(){
-            elem.val(formatWithMask(elem.val(), format, numeric, alpha));
-            if(elem.val().indexOf("_")>=0){
-                elem.val("");
+            if(!suspendFormatting){
+                elem.val(formatWithMask(elem.val(), format, numeric, alpha));
+                if(elem.val().indexOf("_")>=0){
+                    elem.val("");
+                }
             }
         });
 
         elem.focus(function(){
-            if(!elem.val()){
-                elem.val(format);
-                var newCursorPosition = 0;
-                var nextFormatCharToRight = format.substring(newCursorPosition, newCursorPosition+1);
-                while(newCursorPosition < format.length && !((numeric && $.isNumeric(nextFormatCharToRight)) || (alpha && isAlpha(nextFormatCharToRight)) || nextFormatCharToRight == '_')){
-                    newCursorPosition += 1;
-                    nextFormatCharToRight = format.substring(newCursorPosition, newCursorPosition+1);
+            if(!suspendFormatting){
+                if(!elem.val()){
+                    elem.val(format);
+                    var newCursorPosition = 0;
+                    var nextFormatCharToRight = format.substring(newCursorPosition, newCursorPosition+1);
+                    while(newCursorPosition < format.length && !((numeric && $.isNumeric(nextFormatCharToRight)) || (alpha && isAlpha(nextFormatCharToRight)) || nextFormatCharToRight == '_')){
+                        newCursorPosition += 1;
+                        nextFormatCharToRight = format.substring(newCursorPosition, newCursorPosition+1);
+                    }
+                    setCursorPosition(elem, newCursorPosition);
+                    setTimeout(function(){setCursorPosition(elem, newCursorPosition);}, 5);
                 }
-                setCursorPosition(elem, newCursorPosition);
-                setTimeout(function(){setCursorPosition(elem, newCursorPosition);}, 5);
             }
         });
 
@@ -241,9 +261,9 @@
         }
 
         elem.bind("paste", function(){
-                setTimeout(function(){if(elem.val()){
-                    elem.val(formatWithMask(elem.val(), format, numeric, alpha));
-                }
+            setTimeout(function(){if(elem.val()){
+                elem.val(formatWithMask(elem.val(), format, numeric, alpha));
+            }
             }, 5);
         });
 
@@ -259,7 +279,7 @@
     $.fn.asDate = function(){
         this.each(function(index, elem) {
             elem = $(elem);
-            withFormat(elem, "__/__/____","MM/DD/YYYY", true);
+            withFormat(elem, "__/__/____","MM/DD/YYYY", true, false, true);
         });
         return this;
     }
@@ -267,7 +287,7 @@
     $.fn.asUSPhoneNumber = function(){
         this.each(function(index, elem) {
             elem = $(elem);
-            withFormat(elem, "(___) ___-____", "Phone", true);
+            withFormat(elem, "(___) ___-____", "Phone", true, false, true);
         });
         return this;
     }
@@ -275,7 +295,7 @@
     $.fn.asSSN = function(){
         this.each(function(index, elem) {
             elem = $(elem);
-            withFormat(elem, "___-__-____", "SSN", true);
+            withFormat(elem, "___-__-____", "SSN", true, false, true);
         });
         return this;
     }
@@ -283,7 +303,7 @@
     $.fn.asUSZipCode = function(){
         this.each(function(index, elem) {
             elem = $(elem);
-            withFormat(elem, "_____", "Postal Code", true);
+            withFormat(elem, "_____", "Postal Code", true, false, true);
         });
         return this;
     }
@@ -291,7 +311,7 @@
     $.fn.asUsStateAbbr = function(){
         this.each(function(index, elem) {
             elem = $(elem);
-            withFormat(elem, "__", "State", false, true);
+            withFormat(elem, "__", "State", false, true, true);
         });
         return this;
     }
@@ -299,7 +319,7 @@
     $.fn.formatNumericWithFilter = function(filter, placeholder){
         this.each(function(index, elem) {
             elem = $(elem);
-            withFormat(elem, filter, placeholder, true);
+            withFormat(elem, filter, placeholder, true, false, true);
         });
         return this;
     }
@@ -307,7 +327,7 @@
     $.fn.formatAlphaWithFilter = function(filter, placeholder){
         this.each(function(index, elem) {
             elem = $(elem);
-            withFormat(elem, filter, placeholder, false, true);
+            withFormat(elem, filter, placeholder, false, true, true);
         });
         return this;
     }
@@ -315,7 +335,7 @@
     $.fn.formatAlphaNumericWithFilter = function(filter, placeholder){
         this.each(function(index, elem) {
             elem = $(elem);
-            withFormat(elem, filter, placeholder, true, true);
+            withFormat(elem, filter, placeholder, true, true, true);
         });
         return this;
     }
